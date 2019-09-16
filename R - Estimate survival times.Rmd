@@ -1,0 +1,93 @@
+---
+title: "Estimate survival times - Leuk data"
+author: "Naga Pakalapati"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(message=F,warning=F,echo=F,fig_height=10,fig_width=7,cache = F)
+```
+
+```{r}
+#List of libraries used in the project
+library(HSAUR3)
+library(knitr)
+library(ggplot2)
+library(broom)
+library(patchwork)
+```
+
+### Estimate survival times
+
+
+The \textbf{leuk} data from package \textbf{MASS} shows the survival times from diagnosis of patients suffering from leukemia and the values of two explanatory variables, the white blood cell count (wbc) and the presence or absence of a morphological characteristic of the white blood cells (ag).
+
+
+- We define a binary outcome variable according to whether or not patients lived for at least 24 weeks after diagnosis and call it \textit{surv24}. 
+    
+- Fit a logistic regression model to the data with \textit{surv24} as response.
+    
+- We shall construct some graphics useful in the interpretation of the final model.
+    
+- Fit a model with an interaction term between the two predictors and which model fits the data better?
+    
+Let's define a binary outcome as suggested and fit a logistic regression model.
+    
+```{r}
+#load data
+data("leuk", package = "MASS")
+leuk_dat <- leuk
+
+#adding surv24 column
+leuk_dat$surv24 <- ifelse(leuk_dat$time>=24, 1,0)
+
+#fit glm (note: wbc is logtransformed with base 10)
+model1 <- surv24 ~ log10(wbc) + ag
+glm_m1 <- glm(model1, data = leuk_dat, family = binomial())
+
+summary(glm_m1)
+
+```
+
+From the above summary of the model, we can see that **wbc** is not siginificant and the
+presence of morphologic characteristic of wbc is very significant.
+    
+Let's visualize how the probability of longer life expectancy is based on ag present or 
+absent.
+
+```{r}
+#plot probabiliy of ag for each category
+probability <- predict(glm_m1, leuk_dat, type = "response")
+
+plot(probability~leuk_dat$ag, main="Probability of longer life expectancy (base plot)",
+     xlab="presence or absence of a morphological characteristic of the white blood cells",
+     col=c("red", "green"))
+
+#plot in ggplot
+ggplot() +
+  geom_boxplot(aes(x=leuk_dat$ag, y=probability),color = c("red", "green")) +
+  ggtitle("Probability of longer life expectancy (ggplot)") +
+  xlab("presence or absence of a morphological characteristic of the white blood cells")
+```
+
+    
+Lets' fit a second model with interation term.
+    
+```{r}
+#fit glm with interaction term
+model2 <- surv24 ~ log10(wbc) + ag + log10(wbc)*ag
+glm_m2 <- glm(model2, data = leuk_dat, family = binomial())
+summary(glm_m2)
+```
+
+    
+We fitted two models, one with wbc and ag predictoers and another with these both and the
+interaction term between these two. We find that there is no significant interation between
+the terms. So the model with just the original predictors fits the data better.
+
+Also, the higher count of wbc doesn't seem to significantly affect the longivity of survival.
+But the presence or absence of a morphological characteristic of the white blood cells (ag)
+seems to be the major factor. We can say that the presence of (ag) will increase the number of
+weeks of survival.
+
+---------------

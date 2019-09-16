@@ -1,0 +1,189 @@
+---
+title: "Predict if customer defaults - Default data"
+author: "Naga Pakalapati"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(message=F,warning=F,echo=F,fig_height=10,fig_width=7,cache = F)
+```
+
+    ```{r}
+    #List of libraries used in the project
+    library(HSAUR3)
+    library(knitr)
+    library(ggplot2)
+    library(broom)
+    library(patchwork)
+    ```
+
+
+## Predict if customer defaults
+
+\textbf{Default} dataset from \textbf{ISLR} library contains information on ten thousand
+customers. The aim here is to predict which customers will default on their credit card debt.
+It is a four-dimensional dataset with 10000 observations. The question of interest is to
+predict individuals who will default . We want to examine how each predictor variable is
+related to the response (default). We shall do the following on this dataset.
+
+
+- Perform descriptive analysis on the dataset to have an insight. Use summaries and appropriate exploratory graphics to answer the question of interest.
+
+- Use R to build a logistic regression model. 
+
+- Discuss result. Which predictor variables were important? Are there interactions?
+
+- How good is the model? We will assess the performance of the logistic regression
+classifier and find the error rate? 
+    
+    
+##### Descriptive Analysis
+    
+**Dataset Intro**: This simulated dataset contains information on ten thousand customers
+(rows) and the following 4 variables (columns).
+
+  - **default**: A factor with levels No and Yes indicating whether the customer
+  defaulted on their debt.
+  - **student**: A factor with levels No and Yes indicating whether the customer is a
+  student
+  - **balance**: The average balance that the customer has remaining on their credit
+  card after making their monthly payment
+  - **income**: Income of customer
+    
+    ```{r}
+    #load data
+    data(Default, package = "ISLR")
+    
+    #Check first few rows of data and summary statistics of each columns
+    kable(head(Default), caption = "First few rows of data")
+    ```
+
+    
+    The **default** column is the response variable while the other 3 columns **student**,
+    **balnce** and **income** are the explanatoty variables. Let's check the frequency counts
+    and distributions of the variables. And also check if there are any missing values in the
+    dataset.
+    
+    ```{r}
+    #summary stats on the data
+    summary(Default)
+    
+    #Check for missing values
+    cat("Number of rows with missing values in the data:", sum(is.na(Default)))
+    ```
+
+
+    The dataset is good for exploratory analysis. Let's check if we explain **default**
+    column by the variability in balance and income, like if low balance group will default
+    less compared to high or high income will default less compared to low inocome group.
+    
+    ```{r}
+    #Check the dispersion of balances & income for each category of default
+    #layout(matrix(2:2, ncol = 2, nrow = 2))
+    par(mfrow = c(1, 4))
+    plot(balance ~ default, data = Default, col=c("green", "red"))
+    plot(income ~ default, data = Default, col=c("green", "red"))
+    cdplot(default ~ balance, data = Default)
+    cdplot(default ~ income, data = Default)
+    
+    #plot in ggplot
+    plot1 <- ggplot() +
+      geom_boxplot(data = Default, aes(x=default, y=balance), color=c("green","red"))
+    
+    plot2 <- ggplot() +
+      geom_boxplot(data = Default, aes(x=default, y=income), color=c("green","red"))
+    
+    plot1 + plot2
+    ```
+    We see a positive evidence that customers who defualt usually have high average monthly
+    balance post payments. In general, this is to be true as making small monthly payments 
+    will lead to high balances and interests piling up. The longer this trend continues and
+    the more the balance on the card to pay off, the higher the chances are to default.
+    
+    However, the income variable doesn't explain dafualt status much. The defaulters and the
+    non defaulters fall in simmilar income range, with non defaulters being on slightly
+    larger range (both low and high end) but it is not very significant.
+    
+    Now, let's check if being a student has any effect on default.
+    
+    ```{r}
+    #split data set by factors in default column
+    df_yes <- Default[Default$default=="Yes", ]
+    df_no <- Default[Default$default=="No", ]
+    
+    #Calculate percentiles
+    row1 <- (table(Default$student)/length(Default$student))*100
+    #cat("Percentage of non-students and students in defaulters")
+    row2 <- (table(df_yes$student)/length(df_yes$student))*100
+    #cat("Percentage of non-students and students in non-defaulters")
+    row3<- (table(df_no$student)/length(df_no$student))*100
+    
+    dat <- cbind(c(row1[1], row1[2]),c(row2[1], row2[2]),c(row3[1], row3[2]))
+    
+    stu_df <- as.data.frame(as.matrix(dat, nrow=2,ncol=3))
+    names(stu_df) <- c("Total", "Defaulters", "Non-Defaulters")
+    kable(stu_df)
+    ```
+    
+    
+    The above table shows the percentages of non students (No) and students (Yes) in entire
+    data set, defaulters and non-defaulters. There is a slight increase in total percentage
+    of students in defaulters category compared to non-defaulters but not so significant.
+    
+    Let's now build a logistic regression model and evaluate it.
+    
+    ```{r}
+    #glm
+    model1 <- default ~ student + balance + income
+    glm_m1 <- glm(model1, data = Default, family = binomial())
+    
+    
+    model2 <- default ~ student + balance + log10(income)
+    glm_m2 <- glm(model2, data = Default, family = binomial())
+    
+    model3 <- (default ~ student + balance + log10(income) + student*balance + 
+                 student*log10(income) + balance*log10(income))
+    glm_m3 <- glm(model3, data = Default, family = binomial())
+    
+    model4 <- default ~ student + balance
+    glm_m4 <- glm(model4, data = Default, family = binomial())
+    summary(glm_m4)
+    ```
+    After iterating over several models, we found that **balance** is highly significant
+    predictor as we discussed earlier and suprisingly being student is less likely to default
+    than non-student. We have removed the income from the model as it's impact on the
+    predicted variable is no significant. Also we don't find any significant interaction
+    variables.
+    
+    Now let's use this model to train/test the data to predict outcome and evaluate the
+    accuracy of the model.
+      - We will split the data into train and test sets (75/25).
+      - Train the model on train and test the results on test datasets
+      - Campare the predictions with original test data results and 
+      - calculate model accuracy 
+    
+    ```{r}
+    #split data into train test
+    sample <- sample(1:nrow(Default), size = floor(.75*nrow(Default)), replace = F)
+    train <- Default[sample, ]
+    test  <- Default[-sample, ]
+    
+    #fit model
+    model <- default ~ student + balance
+    glm_model <- glm(model, data = train, family = binomial())
+    
+    #predict
+    predictions <- predict(glm_model, test, type = "response")
+    predicted.classes <- ifelse(predictions > 0.5, "Yes", "No")
+    
+    # Model accuracy
+    model_acc <- mean(predicted.classes == test$default)*100
+    cat("Proportion of correctly classified observations:", model_acc,"%\n")
+    cat("Error rate:", 100-model_acc,"%")
+    
+    ```
+    Our model prediction is very high with a low error rate. This can be considered as a good
+    model. Given the data, 97% of the times we are able to accurately predict if a customer
+    will default or not.
+
+---------------
